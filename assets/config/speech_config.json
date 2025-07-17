@@ -1,0 +1,23 @@
+{
+    "defaultSupplier": "speech",
+    "suppliers":[
+        {
+            "name": "speech",
+            "label": "语音",
+            "desc": "语音识别",
+            "models": [
+                {
+                    "name": "mobile",
+                    "version": "1",
+                    "localPath": "/mobile",
+                    "downloadUrl": "https://www.baidu.com",
+                    "modelType": "1",
+                    "modelParams": "1",
+                    "modelVersion": "1",
+                    "fileSize": 1,
+                    "checksum": "1"
+                }
+            ]
+        }
+    ]
+}

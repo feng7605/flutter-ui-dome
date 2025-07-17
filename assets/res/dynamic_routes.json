@@ -1,0 +1,7 @@
+[
+    {
+      "path": "/help",
+      "widget": "HelpPage",
+      "params": {"title": "帮助中心"}
+    }
+  ]

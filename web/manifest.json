@@ -1,6 +1,6 @@
 {
-    "name": "frame",
-    "short_name": "frame",
+    "name": "flutter_frame",
+    "short_name": "flutter_frame",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
