@@ -11,6 +11,11 @@ class IflytekDataSource implements AsrDataSource {
   final _resultController = StreamController<AsrResult>.broadcast();
 
   @override
+  Future<bool> isModelReady() async {
+    return true;
+  }
+
+  @override
   Stream<AsrResult> get resultStream => _resultController.stream;
 
   @override

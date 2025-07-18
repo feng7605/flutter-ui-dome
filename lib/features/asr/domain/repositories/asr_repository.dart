@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../entities/asr_result.dart';
 
 abstract class AsrRepository {
+  Future<bool> isModelReady();
   /// 准备识别器（如下载模型）。返回一个包含准备进度的状态流。
   Stream<PreparationStatus> prepare();
 

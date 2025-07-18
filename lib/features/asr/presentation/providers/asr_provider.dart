@@ -94,7 +94,7 @@ final asrViewModelProvider =
     final repository = ref.watch(asrRepositoryProvider);
     final viewModel = AsrViewModel(repository);
     
-    viewModel.prepare();
+    viewModel.checkStatus();
 
     //ref.onDispose(() => viewModel.dispose());
 
@@ -115,4 +115,10 @@ class InactiveAsrRepository implements AsrRepository {
   Future<void> stopStreamingRecognition() async {}
   @override
   void dispose() {}
+  
+  @override
+  Future<bool> isModelReady() {
+    // TODO: implement isModelReady
+    throw UnimplementedError();
+  }
 }

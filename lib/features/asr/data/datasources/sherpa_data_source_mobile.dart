@@ -32,6 +32,18 @@ class SherpaDataSourceImpl implements AsrDataSource {
   SherpaDataSourceImpl({required this.config});
 
   @override
+  Future<bool> isModelReady() async {
+    // 如果识别器已经加载到内存，那肯定是 ready
+    if (_recognizer != null) return true;
+
+    final modelConfig = config.models.first;
+
+    // 只做文件系统的检查，这是快速的
+    final modelDir = await _fileManager.getModelDirectory(modelConfig);
+    return await _fileManager.validateModelFiles(modelDir, modelConfig);
+  }
+
+  @override
   Stream<AsrResult> get resultStream => _resultController.stream;
 
   @override

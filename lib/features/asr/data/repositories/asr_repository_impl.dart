@@ -7,7 +7,7 @@ class AsrRepositoryImpl implements AsrRepository {
   final AsrDataSource _dataSource;
   
   AsrRepositoryImpl(this._dataSource);
-
+    
   @override
   Stream<PreparationStatus> prepare() {
     return _dataSource.prepare();
@@ -27,5 +27,10 @@ class AsrRepositoryImpl implements AsrRepository {
   @override
   void dispose() {
     _dataSource.dispose();
+  }
+  
+  @override
+  Future<bool> isModelReady() {
+    return _dataSource.isModelReady();
   }
 }

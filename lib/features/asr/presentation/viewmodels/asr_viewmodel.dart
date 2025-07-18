@@ -8,35 +8,54 @@ class AsrViewModel extends StateNotifier<AsrScreenState> {
   StreamSubscription? _recognitionSubscription;
   StreamSubscription? _preparationSubscription;
 
-  AsrViewModel(this._asrRepository) : super(const AsrScreenState(status: AsrStatus.initial));
+  AsrViewModel(this._asrRepository) : super(const AsrScreenState(status: AsrStatus.initial)){
+    checkStatus();
+  }
 
-  void prepare() {
+  /// 检查本地模型状态（快速，非阻塞）
+  Future<void> checkStatus() async {
+    state = state.copyWith(status: AsrStatus.checking, message: "检查模型状态...");
+    try {
+      final bool ready = await _asrRepository.isModelReady();
+      if (ready) {
+        // 如果模型文件存在，我们仍然需要加载它到内存
+        // 为了简化，我们直接进入准备流程，但可以优化
+        // 为了更好的体验，这里可以设置为 readyToLoad 状态
+        // 这里我们直接调用 prepare，但用户也可以手动调用
+        prepareAndLoad();
+      } else {
+        // 如果文件不存在，进入需要下载的状态
+        state = state.copyWith(
+          status: AsrStatus.requiresDownload,
+          message: "离线识别引擎需要下载模型文件。",
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(status: AsrStatus.error, message: "检查状态时出错: $e");
+    }
+  }
+
+  /// 下载、解压并加载模型到内存（重量级操作，由用户触发）
+  void prepareAndLoad() {
     _preparationSubscription?.cancel();
-    state = const AsrScreenState(status: AsrStatus.preparing, message: "准备中...");
-
     _preparationSubscription = _asrRepository.prepare().listen(
       (status) {
         switch (status.step) {
           case PreparationStep.checking:
+             state = state.copyWith(status: AsrStatus.checking, message: status.message);
+             break;
           case PreparationStep.downloading:
             state = state.copyWith(
-              status: AsrStatus.preparing,
+              status: AsrStatus.downloading, // 使用新的下载状态
               message: status.message,
-              preparationProgress: status.progress,
+              downloadProgress: status.progress,
             );
             break;
           case PreparationStep.ready:
-            state = state.copyWith(
-              status: AsrStatus.ready,
-              message: status.message,
-              clearProgress: true,
-            );
+            state = state.copyWith(status: AsrStatus.ready, message: status.message);
             break;
           case PreparationStep.error:
-            state = state.copyWith(
-              status: AsrStatus.error,
-              message: status.message,
-            );
+            state = state.copyWith(status: AsrStatus.error, message: status.message);
             break;
         }
       },
