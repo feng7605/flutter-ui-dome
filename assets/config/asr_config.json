@@ -1,22 +1,40 @@
 {
     "defaultSupplier": "sherpa",
-    "suppliers":[
+    "suppliers": [
         {
             "name": "sherpa",
             "label": "Sherpa 离线",
             "desc": "本地离线语音识别引擎",
-            "models": [
+            "modes": [
                 {
-                    "name": "mobile",
-                    "version": "1",
-                    "localPath": "/mobile",
-                    "downloadUrl": "http://192.168.8.228:7801/test.zip",
-                    "modelType": "zipformer2",
-                    "modelParams": "1",
-                    "modelVersion": "1",
-                    "fileSize": 1,
-                    "checksum": "1",
-                    "files": ["decoder.onnx","encoder.onnx","joiner.onnx","tokens.txt"]
+                    "type": "streaming",
+                    "label": "流式识别",
+                    "models": [
+                        {
+                            "id": "zipformer-test-v1",
+                            "name": "Zipformer2 测试模型 v1",
+                            "version": "1",
+                            "downloadUrl": "http://192.168.8.228:7801/test.zip",
+                            "modelType": "zipformer2",
+                            "files": ["decoder.onnx", "encoder.onnx", "joiner.onnx", "tokens.txt"],
+                            "checksum": "1"
+                        }
+                    ]
+                },
+                {
+                    "type": "once",
+                    "label": "一句话识别",
+                    "models": [
+                        {
+                            "id": "whisper-tiny-v1",
+                            "name": "Whisper Tiny v1",
+                            "version": "1",
+                            "downloadUrl": "...",
+                            "modelType": "whisper",
+                            "files": ["whisper.onnx", "tokens.txt"],
+                            "checksum": "..."
+                        }
+                    ]
                 }
             ]
         },
@@ -24,7 +42,18 @@
             "name": "iflytek", 
             "label": "科大讯飞",
             "desc": "在线语音识别服务",
-            "models": []
+            "modes": [
+                {
+                    "type": "streaming",
+                    "label": "流式识别",
+                    "models": [] 
+                },
+                {
+                    "type": "once",
+                    "label": "一句话识别",
+                    "models": []
+                }
+            ]
         }
     ]
 }

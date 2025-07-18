@@ -4,9 +4,10 @@ import 'package:flutter/foundation.dart';
 import '../entities/asr_result.dart';
 
 abstract class AsrRepository {
-  Future<bool> isModelReady();
+  //是否准备好
+  Future<bool> isReady(String modelId);
   /// 准备识别器（如下载模型）。返回一个包含准备进度的状态流。
-  Stream<PreparationStatus> prepare();
+  Stream<PreparationStatus> prepare(String modelId);
 
   /// 开始流式语音识别，返回一个结果流
   Stream<AsrResult> startStreamingRecognition();
@@ -16,6 +17,8 @@ abstract class AsrRepository {
 
   /// 释放与当前识别器相关的资源
   void dispose();
+
+  Future<AsrResult> recognizeOnce();
 }
 
 /// 定义准备过程的状态

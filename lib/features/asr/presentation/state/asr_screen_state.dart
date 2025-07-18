@@ -17,12 +17,16 @@ class AsrScreenState {
   final String recognizedText;
   final String? message; 
   final double? downloadProgress; // 只用于下载进度
+  final String? selectedModeType; // e.g., "streaming"
+  final String? selectedModelId;  // e.g., "zipformer-test-v1"
 
   const AsrScreenState({
     this.status = AsrStatus.initial,
     this.recognizedText = '',
     this.message,
     this.downloadProgress,
+    this.selectedModeType = '',
+    this.selectedModelId='',
   });
 
   // 便利的 copyWith 方法
@@ -33,12 +37,16 @@ class AsrScreenState {
     double? downloadProgress,
     bool clearMessage = false,
     bool clearProgress = false,
+    String? selectedModeType,
+    String? selectedModelId,
   }) {
     return AsrScreenState(
       status: status ?? this.status,
       recognizedText: recognizedText ?? this.recognizedText,
       message: clearMessage ? null : message ?? this.message,
       downloadProgress: clearProgress ? null : downloadProgress ?? this.downloadProgress,
+      selectedModeType: selectedModeType ?? this.selectedModeType,
+      selectedModelId: selectedModelId ?? this.selectedModelId,
     );
   }
 }

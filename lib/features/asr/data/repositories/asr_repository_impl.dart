@@ -9,8 +9,8 @@ class AsrRepositoryImpl implements AsrRepository {
   AsrRepositoryImpl(this._dataSource);
     
   @override
-  Stream<PreparationStatus> prepare() {
-    return _dataSource.prepare();
+  Stream<PreparationStatus> prepare(String modelId) {
+    return _dataSource.prepare(modelId);
   }
 
   @override
@@ -30,7 +30,12 @@ class AsrRepositoryImpl implements AsrRepository {
   }
   
   @override
-  Future<bool> isModelReady() {
-    return _dataSource.isModelReady();
+  Future<bool> isReady(String modelId) {
+    return _dataSource.isReady(modelId);
+  }
+
+  @override
+  Future<AsrResult> recognizeOnce() {
+    return _dataSource.recognizeOnce();
   }
 }

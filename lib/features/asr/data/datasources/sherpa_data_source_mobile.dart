@@ -32,11 +32,16 @@ class SherpaDataSourceImpl implements AsrDataSource {
   SherpaDataSourceImpl({required this.config});
 
   @override
-  Future<bool> isModelReady() async {
+  Future<bool> isReady(String modelId) async {
     // 如果识别器已经加载到内存，那肯定是 ready
-    if (_recognizer != null) return true;
+    if (_recognizer != null) {
+      // TODO: 需要一个更好的方法来判断当前加载的 recognizer 是否是用户选择的那个
+      // 简单起见，我们假设只要有 recognizer 就绪就可以，但实际应该更严谨
+      return true;
+    }
 
-    final modelConfig = config.models.first;
+    final modelConfig = _findModelConfigById(modelId);
+    if (modelConfig == null) return false;
 
     // 只做文件系统的检查，这是快速的
     final modelDir = await _fileManager.getModelDirectory(modelConfig);
@@ -47,8 +52,12 @@ class SherpaDataSourceImpl implements AsrDataSource {
   Stream<AsrResult> get resultStream => _resultController.stream;
 
   @override
-  Stream<PreparationStatus> prepare() async* {
-    final modelConfig = config.models.first;
+  Stream<PreparationStatus> prepare(String modelId) async* {
+    final modelConfig = _findModelConfigById(modelId);
+    if (modelConfig == null) {
+      yield PreparationStatus(PreparationStep.error, "未找到ID为 '$modelId' 的模型配置");
+      return;
+    }
     Directory? modelDir;
     try {
       sherpa_onnx.initBindings();
@@ -68,7 +77,7 @@ class SherpaDataSourceImpl implements AsrDataSource {
 
       // 准备传递给 Isolate 的参数
       final params = SherpaInitParams(
-        supplierConfig: config!,
+        modelConfig: modelConfig,
         modelPath: modelDir.path,
       );
 
@@ -171,5 +180,23 @@ class SherpaDataSourceImpl implements AsrDataSource {
     _stream?.free();
     _recognizer?.free();
     _resultController.close();
+  }
+  
+  @override
+  Future<AsrResult> recognizeOnce() async {
+    if (_recognizer == null) throw Exception("识别器未准备好");
+    return AsrResult(text: "test");
+  }
+
+  ModelConfig? _findModelConfigById(String? modelId) {
+    if (modelId == null) return null;
+    for (final mode in config.modes) {
+      for (final model in mode.models) {
+        if (model.id == modelId) {
+          return model;
+        }
+      }
+    }
+    return null;
   }
 }

@@ -8,7 +8,14 @@ class AsrViewModel extends StateNotifier<AsrScreenState> {
   StreamSubscription? _recognitionSubscription;
   StreamSubscription? _preparationSubscription;
 
-  AsrViewModel(this._asrRepository) : super(const AsrScreenState(status: AsrStatus.initial)){
+  AsrViewModel(this._asrRepository, {
+    String? initialMode, 
+    String? initialModel,
+  }) : super(AsrScreenState(
+          status: AsrStatus.initial,
+          selectedModeType: initialMode,
+          selectedModelId: initialModel,
+        )) {
     checkStatus();
   }
 
@@ -16,7 +23,8 @@ class AsrViewModel extends StateNotifier<AsrScreenState> {
   Future<void> checkStatus() async {
     state = state.copyWith(status: AsrStatus.checking, message: "检查模型状态...");
     try {
-      final bool ready = await _asrRepository.isModelReady();
+      final bool ready = await _asrRepository.isReady(state.selectedModelId!);
+      
       if (ready) {
         // 如果模型文件存在，我们仍然需要加载它到内存
         // 为了简化，我们直接进入准备流程，但可以优化
@@ -38,7 +46,7 @@ class AsrViewModel extends StateNotifier<AsrScreenState> {
   /// 下载、解压并加载模型到内存（重量级操作，由用户触发）
   void prepareAndLoad() {
     _preparationSubscription?.cancel();
-    _preparationSubscription = _asrRepository.prepare().listen(
+    _preparationSubscription = _asrRepository.prepare(state.selectedModelId!).listen(
       (status) {
         switch (status.step) {
           case PreparationStep.checking:
@@ -93,9 +101,23 @@ class AsrViewModel extends StateNotifier<AsrScreenState> {
     state = state.copyWith(status: AsrStatus.ready);
   }
 
+  //处理用户的选择变化
+  void selectMode(String modeType) {
+    // 切换模式时，重置模型选择，并重新检查状态
+    state = state.copyWith(selectedModeType: modeType, selectedModelId: null);
+    checkStatus();
+  }
+  void selectModel(String modelId) {
+    state = state.copyWith(selectedModelId: modelId);
+    checkStatus();
+  }
   @override
   void dispose() {
     _recognitionSubscription?.cancel();
     _preparationSubscription?.cancel();
+  }
+
+  void recognizeOnce() {
+    _asrRepository.recognizeOnce();
   }
 }

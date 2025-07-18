@@ -14,7 +14,7 @@ class SherpaDataSourceImpl implements AsrDataSource {
   final _resultController = StreamController<AsrResult>.broadcast();
 
   @override
-  Future<bool> isModelReady() async {
+  Future<bool> isReady(String modelId) async {
     return false;
   }
 
@@ -22,7 +22,7 @@ class SherpaDataSourceImpl implements AsrDataSource {
   Stream<AsrResult> get resultStream => _resultController.stream;
 
   @override
-  Stream<PreparationStatus> prepare() async* {
+  Stream<PreparationStatus> prepare(String modelId) async* {
     // 在Web上，Sherpa是不可用的，所以直接报告错误
     const message = "Sherpa 离线识别在 Web 平台不受支持。";
     yield const PreparationStatus(PreparationStep.error, message);
@@ -41,5 +41,11 @@ class SherpaDataSourceImpl implements AsrDataSource {
   @override
   void dispose() {
     _resultController.close();
+  }
+  
+  @override
+  Future<AsrResult> recognizeOnce() {
+    // TODO: implement recognizeOnce
+    throw UnimplementedError();
   }
 }

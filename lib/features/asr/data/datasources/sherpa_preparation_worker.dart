@@ -4,10 +4,10 @@ import '../models/asr_config.dart';
 
 // Isolate 需要的所有数据都必须通过这个参数类传递
 class SherpaInitParams {
-  final SupplierConfig supplierConfig;
+  final ModelConfig modelConfig;
   final String modelPath;
 
-  SherpaInitParams({required this.supplierConfig, required this.modelPath});
+  SherpaInitParams({required this.modelConfig, required this.modelPath});
 }
 
 // 这是将在 Isolate 中运行的顶层函数
@@ -16,11 +16,10 @@ Future<sherpa_onnx.OnlineRecognizer> prepareRecognizerInIsolate(SherpaInitParams
   sherpa_onnx.initBindings();
   
   // 从参数中获取数据
-  final modelConfig = params.supplierConfig.models.first;
   final modelDir = Directory(params.modelPath);
   
   // 这个函数现在是纯计算和同步I/O，它会阻塞当前 Isolate，但不会阻塞UI线程
-  final sherpaModelConfig = await _getSherpaModelConfigFromLocal(modelDir, modelConfig);
+  final sherpaModelConfig = _getSherpaModelConfigFromLocal(modelDir, params.modelConfig);
   final recognizerConfig = sherpa_onnx.OnlineRecognizerConfig(model: sherpaModelConfig);
   
   // 创建并返回识别器实例
@@ -30,10 +29,10 @@ Future<sherpa_onnx.OnlineRecognizer> prepareRecognizerInIsolate(SherpaInitParams
 
 // 将 _getSherpaModelConfigFromLocal 也变成一个顶层函数
 
-Future<sherpa_onnx.OnlineModelConfig> _getSherpaModelConfigFromLocal(
+sherpa_onnx.OnlineModelConfig _getSherpaModelConfigFromLocal(
   Directory modelDir, 
   ModelConfig modelConfig // 传入完整的模型配置
-) async {
+) {
   final modelPath = modelDir.path;
 
   // 根据 modelType 动态构建配置

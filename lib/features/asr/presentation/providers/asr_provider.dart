@@ -92,9 +92,12 @@ final asrRepositoryProvider = Provider.autoDispose<AsrRepository>((ref) {
 final asrViewModelProvider = 
   StateNotifierProvider.autoDispose<AsrViewModel, AsrScreenState>((ref) {
     final repository = ref.watch(asrRepositoryProvider);
-    final viewModel = AsrViewModel(repository);
+    final config = ref.watch(asrConfigProvider).value;
+    final initialMode = config?.suppliers.first.modes.first.type;
+    final initialModel = config?.suppliers.first.modes.first.models.first.id;
+    final viewModel = AsrViewModel(repository, initialMode: initialMode, initialModel: initialModel);
     
-    viewModel.checkStatus();
+    //viewModel.checkStatus();
 
     //ref.onDispose(() => viewModel.dispose());
 
@@ -108,7 +111,7 @@ class InactiveAsrRepository implements AsrRepository {
   InactiveAsrRepository(this._message);
 
   @override
-  Stream<PreparationStatus> prepare() => Stream.value(PreparationStatus(PreparationStep.error, _message));
+  Stream<PreparationStatus> prepare(String modelId) => Stream.value(PreparationStatus(PreparationStep.error, _message));
   @override
   Stream<AsrResult> startStreamingRecognition() => Stream.error(StateError(_message));
   @override
@@ -117,8 +120,13 @@ class InactiveAsrRepository implements AsrRepository {
   void dispose() {}
   
   @override
-  Future<bool> isModelReady() {
-    // TODO: implement isModelReady
+  Future<bool> isReady(String modelId) {
+    return Future.value(true);
+  }
+  
+  @override
+  Future<AsrResult> recognizeOnce() {
+    // TODO: implement recognizeOnce
     throw UnimplementedError();
   }
 }

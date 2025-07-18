@@ -11,7 +11,7 @@ class IflytekDataSource implements AsrDataSource {
   final _resultController = StreamController<AsrResult>.broadcast();
 
   @override
-  Future<bool> isModelReady() async {
+  Future<bool> isReady(String modelId) async {
     return true;
   }
 
@@ -19,7 +19,7 @@ class IflytekDataSource implements AsrDataSource {
   Stream<AsrResult> get resultStream => _resultController.stream;
 
   @override
-  Stream<PreparationStatus> prepare() async* {
+  Stream<PreparationStatus> prepare(String modelId) async* {
     // 讯飞可能不需要准备，直接返回 ready
     yield const PreparationStatus(PreparationStep.ready, "讯飞识别已就绪");
   }
@@ -39,5 +39,11 @@ class IflytekDataSource implements AsrDataSource {
   @override
   void dispose() {
     _resultController.close();
+  }
+  
+  @override
+  Future<AsrResult> recognizeOnce() {
+    // TODO: implement recognizeOnce
+    throw UnimplementedError();
   }
 }

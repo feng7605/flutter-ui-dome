@@ -4,10 +4,10 @@ import '../../domain/repositories/asr_repository.dart';
 
 abstract class AsrDataSource {
 
-  Future<bool> isModelReady();
+  Future<bool> isReady(String modelId);
 
   /// 准备数据源所需资源（如模型），并报告进度
-  Stream<PreparationStatus> prepare();
+  Stream<PreparationStatus> prepare(String modelId);
 
   /// 开始识别
   Future<void> start();
@@ -20,4 +20,7 @@ abstract class AsrDataSource {
   
   /// 释放资源
   void dispose();
+
+  /// 识别一次
+  Future<AsrResult> recognizeOnce();
 }
