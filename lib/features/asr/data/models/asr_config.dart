@@ -63,6 +63,7 @@ class ModelConfig {
   final String modelVersion;
   final int fileSize;
   final String checksum;
+  final List<String> files; // 新增：模型所需的文件列表
 
   const ModelConfig({
     required this.name,
@@ -74,6 +75,7 @@ class ModelConfig {
     required this.modelVersion,
     required this.fileSize,
     required this.checksum,
+    required this.files,
   });
 
   factory ModelConfig.fromJson(Map<String, dynamic> json) {
@@ -87,6 +89,9 @@ class ModelConfig {
       modelVersion: json['modelVersion'] as String,
       fileSize: json['fileSize'] as int,
       checksum: json['checksum'] as String,
+      files: (json['files'] as List<dynamic>)
+          .map((e) => e.toString())
+          .toList(),
     );
   }
 }

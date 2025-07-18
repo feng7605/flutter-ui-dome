@@ -11,6 +11,7 @@ class SpeechRecognitionPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // 1. 监听 ViewModel 的状态，这是 UI 唯一需要的数据源
+    
     final uiState = ref.watch(asrViewModelProvider);
     final viewModel = ref.read(asrViewModelProvider.notifier);
     

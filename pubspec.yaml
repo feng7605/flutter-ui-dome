@@ -56,6 +56,8 @@ dependencies:
 
   sherpa_onnx: ^1.12.6
   record: ^6.0.0
+  archive: ^4.0.7
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:
@@ -78,7 +80,6 @@ flutter:
     - assets/icons/
     - assets/translations/
     - assets/res/
-    - assets/res/onnx/
     - assets/config/
 
   # An image asset can refer to one or more resolution-specific "variants", see

@@ -1,11 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter_frame/features/asr/data/models/asr_config.dart';
+
 import '../../domain/entities/asr_result.dart';
 import '../../domain/repositories/asr_repository.dart';
 import 'asr_data_source.dart';
 
 // 注意这里的类名，与 mobile 版本完全相同
 class SherpaDataSourceImpl implements AsrDataSource {
+
+  final SupplierConfig config;
+  SherpaDataSourceImpl({required this.config});
   final _resultController = StreamController<AsrResult>.broadcast();
 
   @override

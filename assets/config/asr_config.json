@@ -10,12 +10,13 @@
                     "name": "mobile",
                     "version": "1",
                     "localPath": "/mobile",
-                    "downloadUrl": "https://www.baidu.com",
-                    "modelType": "1",
+                    "downloadUrl": "http://192.168.8.228:7801/test.zip",
+                    "modelType": "zipformer2",
                     "modelParams": "1",
                     "modelVersion": "1",
                     "fileSize": 1,
-                    "checksum": "1"
+                    "checksum": "1",
+                    "files": ["decoder.onnx","encoder.onnx","joiner.onnx","tokens.txt"]
                 }
             ]
         },

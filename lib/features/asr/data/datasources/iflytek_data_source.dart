@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'package:flutter_frame/features/asr/data/models/asr_config.dart';
+
 import '../../domain/entities/asr_result.dart';
 import '../../domain/repositories/asr_repository.dart';
 import 'asr_data_source.dart';
 
 class IflytekDataSource implements AsrDataSource {
+  final SupplierConfig config;
+  IflytekDataSource({required this.config});
   final _resultController = StreamController<AsrResult>.broadcast();
 
   @override

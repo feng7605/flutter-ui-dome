@@ -78,6 +78,5 @@ class AsrViewModel extends StateNotifier<AsrScreenState> {
   void dispose() {
     _recognitionSubscription?.cancel();
     _preparationSubscription?.cancel();
-    super.dispose();
   }
 }

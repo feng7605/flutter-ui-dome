@@ -71,11 +71,11 @@ final asrRepositoryProvider = Provider.autoDispose<AsrRepository>((ref) {
       switch (vendor) {
         case AsrVendor.sherpa:
           final sherpaConfig = config.getSupplier('sherpa');
-          dataSource = SherpaDataSourceImpl();
+          dataSource = SherpaDataSourceImpl(config: sherpaConfig!);
           break;
         case AsrVendor.iflytek:
           final iflytekConfig = config.getSupplier('iflytek');
-          dataSource = IflytekDataSource();
+          dataSource = IflytekDataSource(config: iflytekConfig!);
           break;
       }
       ref.onDispose(() => dataSource.dispose());
