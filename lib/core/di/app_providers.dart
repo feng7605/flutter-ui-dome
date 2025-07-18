@@ -2,6 +2,7 @@
 
 import 'package:flutter_frame/core/bootstrap/module_bootstrapper.dart';
 import 'package:flutter_frame/core/di/providers.dart';
+import 'package:flutter_frame/features/asr/presentation/providers/asr_provider.dart';
 import 'package:flutter_frame/features/auth/presentation/providers/auth_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // 1. 创建一个列表，包含所有模块的引导程序 Provider
 final List<Provider<ModuleBootstrap>> _moduleBootstrappers = [
   authBootstrapProvider,
+  asrBootstrapProvider,
 ];
 
 /// 应用启动前必须完成的异步任务它会按顺序执行，确保依赖关系正确。

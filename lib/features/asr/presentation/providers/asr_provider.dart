@@ -1,4 +1,8 @@
 // features/asr/presentation/providers/asr_providers.dart
+import 'package:flutter_frame/core/bootstrap/module_bootstrapper.dart';
+import 'package:flutter_frame/features/asr/data/models/asr_config.dart';
+import 'package:flutter_frame/features/asr/data/services/asr_config_service.dart';
+import 'package:flutter_frame/features/asr/domain/entities/asr_result.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/datasources/asr_data_source.dart';
@@ -10,6 +14,19 @@ import '../../domain/repositories/asr_repository.dart';
 import '../state/asr_screen_state.dart';
 import '../viewmodels/asr_viewmodel.dart';
 
+// 新增 ASR 模块的引导程序
+final asrBootstrapProvider = Provider<ModuleBootstrap>((ref) {
+  return (bootstrapRef) async {
+    // 这个模块的初始化任务就是等待配置加载完成
+    await bootstrapRef.read(asrConfigProvider.future);
+  };
+});
+
+//语音识别配置
+final asrConfigProvider = FutureProvider<AsrConfig>((ref) {
+  final service = AsrConfigService();
+  return service.loadFromAssets('assets/config/asr_config.json');
+});
 
 // 1. 供应商枚举
 enum AsrVendor {
@@ -21,26 +38,53 @@ enum AsrVendor {
 }
 
 // 2. Provider: 管理用户当前选择的供应商
-final selectedVendorProvider = StateProvider<AsrVendor>((ref) => AsrVendor.sherpa);
+final selectedVendorProvider = StateProvider<AsrVendor>((ref) {
+  // watch FutureProvider 的 .value，这会在数据准备好后返回数据，否则返回 null
+  final config = ref.watch(asrConfigProvider).value;
+
+  // 如果配置还没加载好，返回一个默认值
+  if (config == null) {
+    return AsrVendor.sherpa; // 或者任何你想要的启动时默认值
+  }
+  
+  // 配置加载好后，使用配置中的默认值
+  final defaultVendorName = config.defaultSupplier;
+  return AsrVendor.values.firstWhere(
+    (v) => v.name.toLowerCase() == defaultVendorName.toLowerCase(),
+    orElse: () => AsrVendor.sherpa,
+  );
+});
 
 // 3. Provider: 根据选择动态提供 AsrRepository
 final asrRepositoryProvider = Provider.autoDispose<AsrRepository>((ref) {
   final vendor = ref.watch(selectedVendorProvider);
   
-  late final AsrDataSource dataSource;
-  
-  switch (vendor) {
-    case AsrVendor.sherpa:
-      // 现在这行代码是安全的。编译器会根据平台选择正确的 SherpaDataSourceImpl
-      dataSource = SherpaDataSourceImpl();
-      break;
-    case AsrVendor.iflytek:
-      dataSource = IflytekDataSource();
-      break;
-  }
+  // **关键**: 在这里 watch asrConfigProvider。
+  // 这会建立一个依赖关系：当配置加载完成时，这个 Provider 会自动重建。
+  final asyncConfig = ref.watch(asrConfigProvider);
 
-  ref.onDispose(() => dataSource.dispose());
-  return AsrRepositoryImpl(dataSource);
+  // **处理异步状态**: 只有当配置成功加载后，才创建 Repository
+  return asyncConfig.when(
+    data: (config) {
+      // 配置加载成功，继续正常逻辑
+      late final AsrDataSource dataSource;
+      switch (vendor) {
+        case AsrVendor.sherpa:
+          final sherpaConfig = config.getSupplier('sherpa');
+          dataSource = SherpaDataSourceImpl();
+          break;
+        case AsrVendor.iflytek:
+          final iflytekConfig = config.getSupplier('iflytek');
+          dataSource = IflytekDataSource();
+          break;
+      }
+      ref.onDispose(() => dataSource.dispose());
+      return AsrRepositoryImpl(dataSource);
+    },
+    // 在配置加载时或加载失败时，提供一个“空”的或“无效”的 Repository 实现
+    loading: () => InactiveAsrRepository('配置加载中...'),
+    error: (err, stack) => InactiveAsrRepository('ASR 配置加载失败: $err'),
+  );
 });
 
 
@@ -56,3 +100,19 @@ final asrViewModelProvider =
 
     return viewModel;
 });
+
+
+// 4. 新增一个“无效”的 Repository 实现，用于加载和错误状态
+class InactiveAsrRepository implements AsrRepository {
+  final String _message;
+  InactiveAsrRepository(this._message);
+
+  @override
+  Stream<PreparationStatus> prepare() => Stream.value(PreparationStatus(PreparationStep.error, _message));
+  @override
+  Stream<AsrResult> startStreamingRecognition() => Stream.error(StateError(_message));
+  @override
+  Future<void> stopStreamingRecognition() async {}
+  @override
+  void dispose() {}
+}
