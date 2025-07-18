@@ -2,6 +2,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_frame/features/asr/data/datasources/sherpa_preparation_worker.dart';
 import 'package:flutter_frame/features/asr/data/models/asr_config.dart';
 import 'package:flutter_frame/features/asr/data/services/model_downloader.dart';
 import 'package:flutter_frame/features/asr/data/services/model_file_manager.dart';
@@ -49,15 +51,22 @@ class SherpaDataSourceImpl implements AsrDataSource {
         yield* _downloadAndValidateModel(modelDir, modelConfig);
         _fileManager.cleanOldVersions(modelConfig);
       }
-      // 将初始化逻辑移到这里，并从中 yield 最终的 ready 状态
-      yield const PreparationStatus(PreparationStep.checking, "正在初始化识别器...");
-      final sherpaModelConfig = await _getSherpaModelConfigFromLocal(modelDir, modelConfig);
-      final recognizerConfig = sherpa_onnx.OnlineRecognizerConfig(
-        model: sherpaModelConfig,
-      );
-      _recognizer = sherpa_onnx.OnlineRecognizer(recognizerConfig);
+     // 步骤 2: **将耗时操作交给后台 Isolate**
+      yield const PreparationStatus(PreparationStep.checking, "正在加载模型到内存...");
 
+      // 准备传递给 Isolate 的参数
+      final params = SherpaInitParams(
+        supplierConfig: config!,
+        modelPath: modelDir.path,
+      );
+
+      // 使用 compute 在后台执行模型加载和识别器创建
+      // `compute` 函数返回一个 Future，它代表了 Isolate 的计算结果。
+      _recognizer = await compute(prepareRecognizerInIsolate, params);
+      
+      // 步骤 3: Isolate 返回结果后，在主线程更新状态
       yield const PreparationStatus(PreparationStep.ready, "模型已就绪");
+      
     } catch (e) {
       if (modelDir != null) {
         await _fileManager.cleanDirectory(modelDir);
@@ -141,58 +150,6 @@ class SherpaDataSourceImpl implements AsrDataSource {
     _stream = null;
   }
 
-  Future<sherpa_onnx.OnlineModelConfig> _getSherpaModelConfigFromLocal(
-    Directory modelDir, 
-    ModelConfig modelConfig // 传入完整的模型配置
-  ) async {
-    final modelPath = modelDir.path;
-
-    // 根据 modelType 动态构建配置
-    switch (modelConfig.modelType) {
-      case "zipformer":
-        // 适用于包含独立 encoder, decoder, joiner 的模型
-        return sherpa_onnx.OnlineModelConfig(
-          transducer: sherpa_onnx.OnlineTransducerModelConfig(
-            encoder: '$modelPath/encoder.onnx',
-            decoder: '$modelPath/decoder.onnx',
-            joiner: '$modelPath/joiner.onnx',
-          ),
-          tokens: '$modelPath/tokens.txt',
-        );
-      case "zipformer2":
-        // 适用于包含独立 encoder, decoder, joiner 的模型
-        return sherpa_onnx.OnlineModelConfig(
-          transducer: sherpa_onnx.OnlineTransducerModelConfig(
-            encoder: '$modelPath/encoder.onnx',
-            decoder: '$modelPath/decoder.onnx',
-            joiner: '$modelPath/joiner.onnx',
-          ),
-          tokens: '$modelPath/tokens.txt',
-        );
-      
-      case "transducer":
-        // 适用于将 encoder, decoder, joiner 整合到一起的模型
-        return sherpa_onnx.OnlineModelConfig(
-          transducer: sherpa_onnx.OnlineTransducerModelConfig(
-            // 假设整合后的模型文件名在配置中指定
-            encoder: '$modelPath/encoder-plus-decoder.onnx', 
-            decoder: '',
-            joiner: '',
-          ),
-          tokens: '$modelPath/tokens.txt',
-        );
-
-      // 你可以根据需要添加更多模型类型
-      // case "paraformer":
-      //   return sherpa_onnx.OnlineModelConfig(
-      //     paraformer: sherpa_onnx.OnlineParaformerModelConfig(...),
-      //     tokens: '$modelPath/tokens.txt',
-      //   );
-
-      default:
-        throw Exception("不支持的模型类型: ${modelConfig.modelType}");
-    }
-  }
 
   @override
   void dispose() {

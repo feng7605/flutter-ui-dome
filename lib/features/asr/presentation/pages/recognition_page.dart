@@ -1,27 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_frame/features/asr/presentation/state/asr_screen_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/asr_provider.dart';
+import '../state/asr_screen_state.dart';
 import '../widgets/speech_button.dart';
 
-class SpeechRecognitionPage extends ConsumerWidget {
+class SpeechRecognitionPage extends ConsumerStatefulWidget {
   const SpeechRecognitionPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // 1. 监听 ViewModel 的状态，这是 UI 唯一需要的数据源
-    
+  ConsumerState<SpeechRecognitionPage> createState() => _SpeechRecognitionPageState();
+}
+
+class _SpeechRecognitionPageState extends ConsumerState<SpeechRecognitionPage> {
+
+  @override
+  void initState() {
+    super.initState();
+    // 在 Widget 生命周期的早期，安全地触发一次性的准备操作。
+    // 这不会阻塞 build 方法，让 UI 可以立即渲染出加载状态。
+    // 使用 ref.read 是安全的，因为我们不关心后续变化，只想触发动作。
+    ref.read(asrViewModelProvider.notifier).prepare();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 现在，我们只 watch ViewModel 的状态，它会驱动所有UI变化
     final uiState = ref.watch(asrViewModelProvider);
     final viewModel = ref.read(asrViewModelProvider.notifier);
-    
     final selectedVendor = ref.watch(selectedVendorProvider);
-
-    // 2. 按钮是否可用的逻辑被大大简化
-    final bool isActionInProgress = 
-        uiState.status == AsrStatus.preparing || 
-        uiState.status == AsrStatus.recognizing;
-
+    
+    // 根据聚合后的 uiState 来构建 UI
     return Scaffold(
       appBar: AppBar(title: const Text("语音识别")),
       body: Center(
@@ -30,7 +39,7 @@ class SpeechRecognitionPage extends ConsumerWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 3. 下拉菜单逻辑简化
+              // 1. 下拉菜单
               DropdownButton<AsrVendor>(
                 value: selectedVendor,
                 isExpanded: true,
@@ -40,25 +49,26 @@ class SpeechRecognitionPage extends ConsumerWidget {
                           child: Text(vendor.displayName),
                         ))
                     .toList(),
-                onChanged: isActionInProgress ? null : (vendor) {
+                // 只有在非识别状态下才能切换
+                onChanged: uiState.status != AsrStatus.recognizing ? (vendor) {
                   if (vendor != null) {
                     ref.read(selectedVendorProvider.notifier).state = vendor;
                   }
-                },
+                } : null,
               ),
               const SizedBox(height: 40),
 
-              // 4. 状态显示区域现在只依赖一个 uiState 对象
+              // 2. 状态显示区域
               Expanded(
                 child: _buildStatusWidget(context, uiState),
               ),
 
               const SizedBox(height: 40),
               
-              // 5. 按钮逻辑简化
+              // 3. 语音按钮
               SpeechButton(
                 onPressed: (uiState.status == AsrStatus.ready || uiState.status == AsrStatus.recognizing) 
-                           ? () => viewModel.toggleRecognition()
+                           ? viewModel.toggleRecognition
                            : null,
                 isRecognizing: uiState.status == AsrStatus.recognizing,
                 isLoading: uiState.status == AsrStatus.preparing,
@@ -70,7 +80,7 @@ class SpeechRecognitionPage extends ConsumerWidget {
     );
   }
 
-  // 6. 状态显示 Widget 逻辑变得清晰，因为它只处理 AsrScreenState
+  /// 状态显示 Widget，逻辑现在非常统一
   Widget _buildStatusWidget(BuildContext context, AsrScreenState uiState) {
     final textTheme = Theme.of(context).textTheme;
 
@@ -80,10 +90,10 @@ class SpeechRecognitionPage extends ConsumerWidget {
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (uiState.preparationProgress == null)
-              const CircularProgressIndicator()
+            if (uiState.preparationProgress != null)
+              LinearProgressIndicator(value: uiState.preparationProgress)
             else
-              LinearProgressIndicator(value: uiState.preparationProgress),
+              const CircularProgressIndicator(),
             const SizedBox(height: 16),
             Text(uiState.message ?? "初始化..."),
           ],
@@ -99,10 +109,12 @@ class SpeechRecognitionPage extends ConsumerWidget {
 
       case AsrStatus.recognizing:
         return Center(
-          child: Text(
-            uiState.recognizedText.isEmpty ? "请说话..." : uiState.recognizedText,
-            style: textTheme.titleLarge?.copyWith(height: 1.5),
-            textAlign: TextAlign.center,
+          child: SingleChildScrollView(
+            child: Text(
+              uiState.recognizedText.isEmpty ? "请说话..." : uiState.recognizedText,
+              style: textTheme.titleLarge?.copyWith(height: 1.5),
+              textAlign: TextAlign.center,
+            ),
           ),
         );
 
