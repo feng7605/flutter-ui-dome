@@ -11,7 +11,6 @@ import '../../features/auth/presentation/pages/register_page.dart';
 import '../../dev/mock_login_page.dart';
 import '../../dev/dev_tools_button.dart';
 import 'route_guards.dart';
-import 'dynamic_routes.dart';
 
 /// A service for app navigation
 class AppRouter {

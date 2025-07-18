@@ -1,17 +1,19 @@
+// core/routing/route_guards.dart
+
+import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/providers/auth_providers.dart';
-import '../../features/auth/presentation/state/auth_notifier.dart';
-import 'app_router.dart';
+import 'app_router.dart'; // For Routes constants
 
-// 为新的 RouteGuards 创建一个 Provider
+/// Provider for the RouteGuards instance.
 final routeGuardsProvider = Provider<RouteGuards>((ref) {
   return RouteGuards(ref);
 });
 
-/// A class that provides route guards and redirection logic
+/// A class that provides route guards and redirection logic for GoRouter.
 class RouteGuards {
   final Ref _ref;
 
@@ -22,31 +24,51 @@ class RouteGuards {
   String? globalRedirect(BuildContext context, GoRouterState state) {
     final authState = _ref.read(authStateProvider);
     final isLoggedIn = authState.isAuthenticated;
+    final currentRoute = state.matchedLocation;
 
-    // Define which routes are part of the authentication flow (publicly accessible to unauthenticated users)
-    final authFlowRoutes = [Routes.login, Routes.register, Routes.mockLogin];
-    final isGoingToAuthFlow = authFlowRoutes.contains(state.matchedLocation);
+    // --- START OF THE FIX ---
 
-    // If the app is still in its initial state (auth check hasn't completed),
-    // and we are not on the splash screen, don't redirect yet. Let the splash screen handle it.
-    if (authState.isInitial && state.matchedLocation != Routes.splash) {
-      // Returning null means "do nothing, wait for a refresh".
+    // 1. Define a list of routes that are always publicly accessible, regardless of login state.
+    final publicRoutes = [
+      Routes.splash,
+      Routes.login,
+      Routes.register,
+    ];
+
+    // 2. In debug mode, add development-only routes to the public list.
+    if (kDebugMode) {
+      publicRoutes.add(Routes.mockLogin);
+      // You can add more dev-only routes here, e.g., a dev tools page
+      publicRoutes.add('/dev-tools'); 
+      final isAuthPage = state.matchedLocation == Routes.login || state.matchedLocation == Routes.register;
+      if (!isLoggedIn && !isAuthPage) {
+        return Routes.mockLogin;
+      }
+    }
+
+    final isGoingToPublicRoute = publicRoutes.contains(currentRoute);
+
+    // --- END OF THE FIX ---
+    
+    // If the app is still initializing, let the splash screen handle logic.
+    // Do not redirect anywhere yet.
+    if (authState.isInitial) {
       return null;
     }
     
-    // If the user is logged in and tries to access a page in the auth flow (like login),
-    // redirect them to the home page.
-    if (isLoggedIn && isGoingToAuthFlow) {
+    // If the user is logged in and tries to access a standard auth page (not mock login), redirect to home.
+    if (isLoggedIn && (currentRoute == Routes.login || currentRoute == Routes.register)) {
       return Routes.home;
     }
 
-    // If the user is NOT logged in and tries to access a protected page
-    // (any page not in the auth flow and not the splash screen), redirect them to the login page.
-    if (!isLoggedIn && !isGoingToAuthFlow && state.matchedLocation != Routes.splash) {
+    // If the user is NOT logged in and is trying to access a page that is NOT public,
+    // redirect them to the login page.
+    if (!isLoggedIn && !isGoingToPublicRoute) {
       return Routes.login;
     }
 
-    // In all other cases, allow navigation.
+    // In all other cases (e.g., logged in user accessing a protected page, or any user accessing a public page),
+    // allow navigation.
     return null;
   }
 }

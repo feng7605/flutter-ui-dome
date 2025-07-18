@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_frame/features/asr/presentation/state/asr_screen_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/sherpa_model_state.dart';
-import '../providers/recognition_provider.dart';
-import '../viewmodels/recognition_viewmodel.dart';
+import '../providers/asr_provider.dart';
 import '../widgets/speech_button.dart';
 
 class SpeechRecognitionPage extends ConsumerWidget {
@@ -11,62 +10,57 @@ class SpeechRecognitionPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. 获取完整的 ViewModel 状态对象
-    final vmState = ref.watch(speechRecognitionViewModelProvider);
-    final viewModel = ref.read(speechRecognitionViewModelProvider.notifier);
+    // 1. 监听 ViewModel 的状态，这是 UI 唯一需要的数据源
+    final uiState = ref.watch(asrViewModelProvider);
+    final viewModel = ref.read(asrViewModelProvider.notifier);
+    
     final selectedVendor = ref.watch(selectedVendorProvider);
 
-    final sherpaModelState = (selectedVendor == SpeechVendor.sherpa)
-        ? ref.watch(sherpaModelManagerProvider)
-        : null;
-
-    // isBusy 用于显示加载指示器并禁用按钮，它优先于 isRecognizing
-    // 当模型在准备，或者识别结果在加载（但还没进入正在识别状态时），都算繁忙
-    final bool isBusy = sherpaModelState?.status == ModelStatus.checking ||
-                        sherpaModelState?.status == ModelStatus.downloading ||
-                        (vmState.result.isLoading && !vmState.isRecognizing);
+    // 2. 按钮是否可用的逻辑被大大简化
+    final bool isActionInProgress = 
+        uiState.status == AsrStatus.preparing || 
+        uiState.status == AsrStatus.recognizing;
 
     return Scaffold(
+      appBar: AppBar(title: const Text("语音识别")),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            color: Theme.of(context).canvasColor,
-            child:DropdownButton<SpeechVendor>(
+              // 3. 下拉菜单逻辑简化
+              DropdownButton<AsrVendor>(
                 value: selectedVendor,
                 isExpanded: true,
-                items: SpeechVendor.values
+                items: AsrVendor.values
                     .map((vendor) => DropdownMenuItem(
                           value: vendor,
                           child: Text(vendor.displayName),
                         ))
                     .toList(),
-                // 当正在识别或繁忙时，禁止切换供应商
-                onChanged: (vmState.isRecognizing || isBusy) ? null : (vendor) {
+                onChanged: isActionInProgress ? null : (vendor) {
                   if (vendor != null) {
                     ref.read(selectedVendorProvider.notifier).state = vendor;
                   }
                 },
-              )
-            ),
-            const SizedBox(height: 40),
+              ),
+              const SizedBox(height: 40),
 
-              // **核心修复点：**
-              // 将 vmState.result 传递给 _buildStatusWidget，而不是不存在的 recognitionState
+              // 4. 状态显示区域现在只依赖一个 uiState 对象
               Expanded(
-                child: _buildStatusWidget(context, vmState.result, sherpaModelState),
+                child: _buildStatusWidget(context, uiState),
               ),
 
               const SizedBox(height: 40),
               
+              // 5. 按钮逻辑简化
               SpeechButton(
-                onPressed: isBusy ? null : () => viewModel.recognize(),
-                isRecognizing: vmState.isRecognizing,
-                isLoading: isBusy,
+                onPressed: (uiState.status == AsrStatus.ready || uiState.status == AsrStatus.recognizing) 
+                           ? () => viewModel.toggleRecognition()
+                           : null,
+                isRecognizing: uiState.status == AsrStatus.recognizing,
+                isLoading: uiState.status == AsrStatus.preparing,
               ),
             ],
           ),
@@ -75,79 +69,50 @@ class SpeechRecognitionPage extends ConsumerWidget {
     );
   }
 
-  /// 抽离出一个方法来处理复杂的UI状态显示，保持 build 方法整洁
-  /// 这个方法内部不需要任何改动，因为它本来就期望接收 AsyncValue<String>
-  Widget _buildStatusWidget(
-    BuildContext context,
-    AsyncValue<String> recognitionResult,
-    SherpaModelState? sherpaModelState,
-  ) {
-    // 优先显示 Sherpa 模型的准备状态
-    if (sherpaModelState != null) {
-      switch (sherpaModelState.status) {
-        case ModelStatus.checking:
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(sherpaModelState.message ?? "正在检查模型...")
-            ],
-          );
-        case ModelStatus.downloading:
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              LinearProgressIndicator(value: sherpaModelState.downloadProgress),
-              const SizedBox(height: 16),
-              Text('正在下载模型... ${(sherpaModelState.downloadProgress! * 100).toStringAsFixed(0)}%'),
-            ],
-          );
-        case ModelStatus.error:
-          return Center(
-            child: Text(
-              "模型错误: ${sherpaModelState.message}",
-              style: const TextStyle(color: Colors.red),
-              textAlign: TextAlign.center,
-            ),
-          );
-        case ModelStatus.ready:
-        case ModelStatus.initial:
-          // 如果模型已就绪或在初始状态，则交由识别状态来处理UI
-          break;
-      }
-    }
+  // 6. 状态显示 Widget 逻辑变得清晰，因为它只处理 AsrScreenState
+  Widget _buildStatusWidget(BuildContext context, AsrScreenState uiState) {
+    final textTheme = Theme.of(context).textTheme;
 
-    // 如果模型状态正常，则显示识别结果状态
-    return recognitionResult.when(
-      data: (text) {
-        final displayText = text.isEmpty ? "点击按钮开始识别" : text;
+    switch (uiState.status) {
+      case AsrStatus.initial:
+      case AsrStatus.preparing:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (uiState.preparationProgress == null)
+              const CircularProgressIndicator()
+            else
+              LinearProgressIndicator(value: uiState.preparationProgress),
+            const SizedBox(height: 16),
+            Text(uiState.message ?? "初始化..."),
+          ],
+        );
+
+      case AsrStatus.ready:
         return Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(
-              displayText,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(height: 1.5),
-            ),
+          child: Text(
+            uiState.message ?? "准备就绪，点击开始",
+            style: textTheme.titleLarge,
           ),
         );
-      },
-      loading: () => Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text("准备中...")
-        ],
-      ),
-      error: (e, _) => Center(
-        child: Text(
-          "出错: $e",
-          style: const TextStyle(color: Colors.red),
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
+
+      case AsrStatus.recognizing:
+        return Center(
+          child: Text(
+            uiState.recognizedText.isEmpty ? "请说话..." : uiState.recognizedText,
+            style: textTheme.titleLarge?.copyWith(height: 1.5),
+            textAlign: TextAlign.center,
+          ),
+        );
+
+      case AsrStatus.error:
+        return Center(
+          child: Text(
+            "错误: ${uiState.message}",
+            style: textTheme.titleLarge?.copyWith(color: Colors.red),
+            textAlign: TextAlign.center,
+          ),
+        );
+    }
   }
 }

@@ -1,3 +1,4 @@
+import 'package:flutter_frame/core/bootstrap/module_bootstrapper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/providers.dart';
@@ -9,6 +10,12 @@ import '../../../../domain/usecases/get_current_user_usecase.dart';
 import '../../../../domain/usecases/login_usecase.dart';
 import '../../../../domain/usecases/register_usecase.dart';
 import '../state/auth_notifier.dart';
+
+final authBootstrapProvider = Provider<ModuleBootstrap>((ref) {
+  return (bootstrapRef) async {
+    await bootstrapRef.read(authStateProvider.notifier).checkAuth();
+  };
+});
 
 // 数据源提供者
 final authLocalDataSourceProvider = Provider<AuthLocalDataSource>((ref) {
