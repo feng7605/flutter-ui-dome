@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'package:flutter_frame/features/speech_recognition/data/models/speech_config.dart';
-import 'package:flutter_frame/features/speech_recognition/data/services/config_service.dart';
-import 'package:flutter_frame/features/speech_recognition/data/services/recognition_service_provider.dart';
+import 'package:flutter_frame/features/asr/data/models/speech_config.dart';
+import 'package:flutter_frame/features/asr/data/services/config_service.dart';
+import 'package:flutter_frame/features/asr/data/services/recognition_service_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/recognition_provider.dart';

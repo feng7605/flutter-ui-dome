@@ -5,15 +5,13 @@ import '../../data/datasources/sherpa_speech_recognizer.dart';  // 引入 Sherpa
 import '../../data/datasources/base_speech_recognizer.dart';
 import '../../data/datasources/sherpa_model_manager.dart';
 import '../../data/datasources/sherpa_model_state.dart';
-import '../../data/repositories/speech_recognizer_repository_impl.dart';
-import '../../domain/entities/speech_result.dart';
-import '../../domain/repositories/speech_recognizer_repository.dart';
-import '../viewmodels/speech_recognition_viewmodel.dart';
+import '../viewmodels/recognition_viewmodel.dart';
 
 // 1. 定义供应商枚举，用于UI选择和逻辑切换
 enum SpeechVendor {
-  iflytek('科大讯飞'),
-  sherpa('Sherpa');
+  sherpa('sherpa离线'),
+  iflytek('科大讯飞');
+  
   // 未来可以继续添加 'Baidu', 'Tencent' 等
 
   const SpeechVendor(this.displayName);
@@ -21,7 +19,7 @@ enum SpeechVendor {
 }
 
 // 2. Provider: 管理用户当前选择的供应商
-final selectedVendorProvider = StateProvider<SpeechVendor>((ref) => SpeechVendor.iflytek);
+final selectedVendorProvider = StateProvider<SpeechVendor>((ref) => SpeechVendor.sherpa);
 
 // 3. Provider: 专门用于 Sherpa 模型管理的 Provider
 //    使用 .autoDispose 可以在 Sherpa 不被选择时自动销毁，释放资源

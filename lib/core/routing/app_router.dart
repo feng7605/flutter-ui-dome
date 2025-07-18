@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_frame/features/speech_recognition/presentation/pages/recognition_page.dart';
+import 'package:flutter_frame/features/asr/presentation/pages/recognition_page.dart';
 import 'package:flutter_frame/presentation/pages/speech/speech_page.dart';
 import 'package:go_router/go_router.dart';
 
@@ -17,18 +17,23 @@ import 'dynamic_routes.dart';
 class AppRouter {
   final RouteGuards _routeGuards;
   final List<GoRoute> _dynamicRoutes; // 接收动态路由
+  final Listenable? _refreshListenable; // 新增
 
   /// Creates a new [AppRouter]
-  AppRouter({RouteGuards? routeGuards, List<GoRoute>? dynamicRoutes})
-      : _routeGuards = routeGuards ?? RouteGuards(),
-        _dynamicRoutes = dynamicRoutes ?? [];
+  AppRouter({
+    required RouteGuards routeGuards,
+    List<GoRoute>? dynamicRoutes,
+    Listenable? refreshListenable, // 新增
+  })  : _routeGuards = routeGuards,
+        _dynamicRoutes = dynamicRoutes ?? [],
+        _refreshListenable = refreshListenable;
 
   /// The GoRouter instance
   late final GoRouter router = GoRouter(
     initialLocation: Routes.splash,
     debugLogDiagnostics: true,
     redirect: _routeGuards.globalRedirect,
-    refreshListenable: _routeGuards.refreshListenable,
+    refreshListenable: _refreshListenable,
     errorBuilder: (context, state) => _notFoundPage(context, state),
     routes: [
       // Splash route

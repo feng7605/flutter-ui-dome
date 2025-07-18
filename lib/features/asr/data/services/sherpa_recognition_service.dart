@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:flutter_frame/features/speech_recognition/data/datasources/sherpa_model_state.dart';
-import 'package:flutter_frame/features/speech_recognition/data/utils/utils.dart';
-import 'package:flutter_frame/features/speech_recognition/presentation/providers/recognition_provider.dart';
+import 'package:flutter_frame/features/asr/data/datasources/sherpa_model_state.dart';
+import 'package:flutter_frame/features/asr/data/utils/utils.dart';
+import 'package:flutter_frame/features/asr/presentation/providers/recognition_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa_onnx;
 import 'audio_recorder_service.dart';// 假设 getOnlineModelConfig 和 convertBytesToFloat32 在这里

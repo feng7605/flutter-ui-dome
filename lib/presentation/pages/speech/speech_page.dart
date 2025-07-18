@@ -1,6 +1,6 @@
 
 import 'package:flutter/material.dart';
-import 'package:flutter_frame/features/speech_recognition/presentation/pages/recognition_page.dart';
+import 'package:flutter_frame/features/asr/presentation/pages/recognition_page.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum DemoType {

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/datasources/sherpa_model_state.dart';
 import '../providers/recognition_provider.dart';
-import '../viewmodels/speech_recognition_viewmodel.dart';
+import '../viewmodels/recognition_viewmodel.dart';
 import '../widgets/speech_button.dart';
 
 class SpeechRecognitionPage extends ConsumerWidget {

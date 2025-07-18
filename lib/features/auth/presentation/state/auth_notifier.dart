@@ -11,32 +11,50 @@ import '../../../../core/usecases/usecase.dart';
 /// 认证状态
 @immutable
 class AuthState {
+  /// True if a process like login or register is in progress.
   final bool isLoading;
+  /// The currently authenticated user. Null if not authenticated.
   final User? user;
+  /// An error message, if any auth operation failed.
   final String? errorMessage;
+  /// True if the initial authentication check has not yet completed.
+  final bool isInitial;
 
   const AuthState({
     this.isLoading = false,
     this.user,
     this.errorMessage,
+    this.isInitial = false,
   });
 
+  /// The initial state of authentication before any checks are made.
+  const AuthState.initial()
+      : isLoading = false,
+        user = null,
+        errorMessage = null,
+        isInitial = true;
+
+  /// True if a user is currently authenticated.
+  bool get isAuthenticated => user != null;
+
+  /// Creates a copy of the state with optional new values.
   AuthState copyWith({
     bool? isLoading,
     User? user,
-    String? errorMessage,
+    // Use a wrapper to differentiate between setting null and not changing.
+    ValueGetter<String?>? errorMessage, 
+    bool? isInitial,
   }) {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
       user: user ?? this.user,
-      errorMessage: errorMessage,
+      errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
+      isInitial: isInitial ?? this.isInitial,
     );
   }
-
-  bool get isAuthenticated => user != null;
 }
 
-/// 认证状态管理器
+/// Manages the authentication state and business logic.
 class AuthNotifier extends StateNotifier<AuthState> {
   final LoginUseCase _loginUseCase;
   final RegisterUseCase _registerUseCase;
@@ -49,70 +67,52 @@ class AuthNotifier extends StateNotifier<AuthState> {
   })  : _loginUseCase = loginUseCase,
         _registerUseCase = registerUseCase,
         _getCurrentUserUseCase = getCurrentUserUseCase,
-        super(const AuthState());
+        // Start with the .initial() state
+        super(const AuthState.initial());
+        
+  // Note: The initial auth check is now handled by the appBootstrapProvider
+  // to ensure it completes before the app UI loads.
+  // If you want it to run when the provider is first used, you can call it here.
 
-  /// 检查用户是否已登录
+  /// Checks for a currently signed-in user (e.g., from a stored token).
   Future<void> checkAuth() async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
-    
     final result = await _getCurrentUserUseCase(NoParams());
     
+    // After the check, the state is no longer 'initial'.
     result.fold(
-      (failure) => state = state.copyWith(
-        isLoading: false,
-        errorMessage: failure.message,
-      ),
-      (user) => state = state.copyWith(
-        isLoading: false,
-        user: user,
-      ),
+      (failure) => state = AuthState(user: null, errorMessage: failure.message),
+      (user) => state = AuthState(user: user),
     );
   }
 
-  /// 登录用户
+  /// Logs in a user with email and password.
   Future<void> login(String email, String password) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, errorMessage: () => null, isInitial: false);
     
     final params = LoginParams(email: email, password: password);
     final result = await _loginUseCase(params);
     
     result.fold(
-      (failure) => state = state.copyWith(
-        isLoading: false,
-        errorMessage: failure.message,
-      ),
-      (user) => state = state.copyWith(
-        isLoading: false,
-        user: user,
-      ),
+      (failure) => state = state.copyWith(isLoading: false, errorMessage: () => failure.message),
+      (user) => state = state.copyWith(isLoading: false, user: user, errorMessage: () => null),
     );
   }
 
-  /// 注册用户
+  /// Registers a new user.
   Future<void> register(String name, String email, String password) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, errorMessage: () => null, isInitial: false);
     
-    final params = RegisterParams(
-      name: name,
-      email: email,
-      password: password,
-    );
+    final params = RegisterParams(name: name, email: email, password: password);
     final result = await _registerUseCase(params);
     
     result.fold(
-      (failure) => state = state.copyWith(
-        isLoading: false,
-        errorMessage: failure.message,
-      ),
-      (user) => state = state.copyWith(
-        isLoading: false,
-        user: user,
-      ),
+      (failure) => state = state.copyWith(isLoading: false, errorMessage: () => failure.message),
+      (user) => state = state.copyWith(isLoading: false, user: user, errorMessage: () => null),
     );
   }
 
-  /// 清除错误消息
+  /// Clears any existing error message from the state.
   void clearError() {
-    state = state.copyWith(errorMessage: null);
+    state = state.copyWith(errorMessage: () => null);
   }
 }

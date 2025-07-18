@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
-import 'package:flutter_frame/features/speech_recognition/data/models/speech_config.dart';
+import 'package:flutter_frame/features/asr/data/models/speech_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ConfigService {

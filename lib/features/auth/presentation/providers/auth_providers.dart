@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/providers.dart';
-import '../../../../core/usecases/usecase.dart';
 import '../../../../data/datasources/auth_local_data_source.dart';
 import '../../../../data/datasources/auth_remote_data_source.dart';
 import '../../../../data/repositories/auth_repository_impl.dart';

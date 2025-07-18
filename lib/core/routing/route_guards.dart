@@ -6,96 +6,47 @@ import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/state/auth_notifier.dart';
 import 'app_router.dart';
 
+// 为新的 RouteGuards 创建一个 Provider
+final routeGuardsProvider = Provider<RouteGuards>((ref) {
+  return RouteGuards(ref);
+});
+
 /// A class that provides route guards and redirection logic
 class RouteGuards {
-  /// Refreshable listenable for auth state
-  final AuthStateNotifier refreshListenable;
-  
-  /// Creates a new [RouteGuards]
-  RouteGuards({
-    AuthStateNotifier? authStateNotifier,
-  }) : refreshListenable = authStateNotifier ?? AuthStateNotifier();
+  final Ref _ref;
 
-  /// Global redirection logic
+  /// Creates a new [RouteGuards] instance that uses Riverpod's [Ref] for state access.
+  RouteGuards(this._ref);
+
+  /// Global redirection logic that is checked on every navigation.
   String? globalRedirect(BuildContext context, GoRouterState state) {
-    final isSplash = state.matchedLocation == Routes.splash;
-    final isAuthPage = state.matchedLocation == Routes.login ||
-        state.matchedLocation == Routes.register;
-    final isMockLogin = state.matchedLocation == Routes.mockLogin;
+    final authState = _ref.read(authStateProvider);
+    final isLoggedIn = authState.isAuthenticated;
 
-    // If the user is on the splash page or mock login page, allow it
-    if (isSplash || isMockLogin) {
+    // Define which routes are part of the authentication flow (publicly accessible to unauthenticated users)
+    final authFlowRoutes = [Routes.login, Routes.register, Routes.mockLogin];
+    final isGoingToAuthFlow = authFlowRoutes.contains(state.matchedLocation);
+
+    // If the app is still in its initial state (auth check hasn't completed),
+    // and we are not on the splash screen, don't redirect yet. Let the splash screen handle it.
+    if (authState.isInitial && state.matchedLocation != Routes.splash) {
+      // Returning null means "do nothing, wait for a refresh".
       return null;
     }
-
-    // Get auth state
-    final isLoggedIn = refreshListenable.isLoggedIn;
-
-    // If the user is not logged in and not on an auth page, redirect to login
-    if (!isLoggedIn && !isAuthPage) {
-      return Routes.mockLogin;
-    }
-
-    // If the user is logged in and on an auth page, redirect to home
-    if (isLoggedIn && isAuthPage) {
+    
+    // If the user is logged in and tries to access a page in the auth flow (like login),
+    // redirect them to the home page.
+    if (isLoggedIn && isGoingToAuthFlow) {
       return Routes.home;
     }
 
-    // Allow navigation
-    return null;
-  }
-
-  /// Auth required guard
-  String? authGuard(BuildContext context, GoRouterState state) {
-    if (!refreshListenable.isLoggedIn) {
+    // If the user is NOT logged in and tries to access a protected page
+    // (any page not in the auth flow and not the splash screen), redirect them to the login page.
+    if (!isLoggedIn && !isGoingToAuthFlow && state.matchedLocation != Routes.splash) {
       return Routes.login;
     }
+
+    // In all other cases, allow navigation.
     return null;
-  }
-
-  /// Guest only guard (for auth pages)
-  String? guestGuard(BuildContext context, GoRouterState state) {
-    if (refreshListenable.isLoggedIn) {
-      return Routes.home;
-    }
-    return null;
-  }
-}
-
-/// A notifier for authentication state that listens to Riverpod
-class AuthStateNotifier extends ChangeNotifier {
-  final Ref? _ref;
-  bool _isLoggedIn = false;
-
-  /// Whether the user is logged in
-  bool get isLoggedIn => _isLoggedIn;
-
-  /// Creates a new [AuthStateNotifier]
-  AuthStateNotifier([this._ref]) {
-    _initializeAuthListener();
-  }
-
-  void _initializeAuthListener() {
-    if (_ref != null) {
-      // Listen to auth state changes
-      _ref.listen<AuthState>(
-        authStateProvider,
-        (previous, next) {
-          final isAuthenticated = next.isAuthenticated;
-          if (_isLoggedIn != isAuthenticated) {
-            _isLoggedIn = isAuthenticated;
-            notifyListeners();
-          }
-        },
-      );
-    }
-  }
-
-  /// Sets the logged in state manually (for testing or when not using Riverpod)
-  set isLoggedIn(bool value) {
-    if (_isLoggedIn != value) {
-      _isLoggedIn = value;
-      notifyListeners();
-    }
   }
 }
