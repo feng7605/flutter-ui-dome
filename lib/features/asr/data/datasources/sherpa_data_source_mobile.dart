@@ -3,11 +3,13 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_frame/core/constants/app_constants.dart';
+import 'package:flutter_frame/core/di/core_providers.dart';
+import 'package:flutter_frame/core/services/download/downloader.dart';
+import 'package:flutter_frame/core/utils/audio_utils.dart';
 import 'package:flutter_frame/features/asr/data/datasources/sherpa_preparation_worker.dart';
 import 'package:flutter_frame/features/asr/data/models/asr_config.dart';
-import 'package:flutter_frame/features/asr/data/services/model_downloader.dart';
-import 'package:flutter_frame/features/asr/data/services/model_file_manager.dart';
-import 'package:record/record.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa_onnx;
 
 import '../../domain/entities/asr_result.dart';
@@ -17,11 +19,9 @@ import 'asr_data_source.dart';
 
 // 这是移动端的实现
 class SherpaDataSourceImpl implements AsrDataSource {
+  final Ref _ref;
   final SupplierConfig config;
-  final _fileManager = ModelFileManager();
-  final _downloader = ModelDownloader();
 
-  final _audioRecorder = AudioRecorder();
   sherpa_onnx.OnlineRecognizer? _recognizer;
   sherpa_onnx.OnlineStream? _stream;
   StreamSubscription? _audioSubscription;
@@ -29,7 +29,7 @@ class SherpaDataSourceImpl implements AsrDataSource {
 
   final _resultController = StreamController<AsrResult>.broadcast();
 
-  SherpaDataSourceImpl({required this.config});
+  SherpaDataSourceImpl({required this.config, required Ref ref}): _ref = ref;
 
   @override
   Future<bool> isReady(String modelId) async {
@@ -44,8 +44,12 @@ class SherpaDataSourceImpl implements AsrDataSource {
     if (modelConfig == null) return false;
 
     // 只做文件系统的检查，这是快速的
-    final modelDir = await _fileManager.getModelDirectory(modelConfig);
-    return await _fileManager.validateModelFiles(modelDir, modelConfig);
+    final fileManager = _ref.read(fileManagerProvider);
+    final modelDir = await fileManager.getResourceDirectory(
+      moduleName: 'asr',
+      resourceType: 'models',
+      resourceId: modelConfig.id);
+    return await fileManager.validateFilesExist(modelDir, modelConfig.files);
   }
 
   @override
@@ -59,18 +63,28 @@ class SherpaDataSourceImpl implements AsrDataSource {
       return;
     }
     Directory? modelDir;
+    final fileManager = _ref.read(fileManagerProvider);
     try {
       sherpa_onnx.initBindings();
       
       yield const PreparationStatus(PreparationStep.checking, "正在检查本地模型...");
-      modelDir = await _fileManager.getModelDirectory(modelConfig);
       
-      final bool isModelValid = await _fileManager.validateModelFiles(modelDir, modelConfig);
+      modelDir = await fileManager.getResourceDirectory(
+      moduleName: AppConstants.moduleAsr,
+      resourceType: AppConstants.resourceTypeModels,
+      resourceId: modelConfig.id);
+      
+      final bool isModelValid = await fileManager.validateFilesExist(modelDir, modelConfig.files);
 
       if (!isModelValid) {
         // 如果模型无效，则下载并解压
         yield* _downloadAndValidateModel(modelDir, modelConfig);
-        _fileManager.cleanOldVersions(modelConfig);
+        await fileManager.cleanOldVersions(
+          moduleName: AppConstants.moduleAsr,
+          resourceType: AppConstants.resourceTypeModels,
+          resourceName: modelConfig.name, // 假设 name 是'zipformer'
+          currentVersionId: modelConfig.id, // 假设 id 是 'zipformer-v2'
+        );
       }
      // 步骤 2: **将耗时操作交给后台 Isolate**
       yield const PreparationStatus(PreparationStep.checking, "正在加载模型到内存...");
@@ -90,7 +104,7 @@ class SherpaDataSourceImpl implements AsrDataSource {
       
     } catch (e) {
       if (modelDir != null) {
-        await _fileManager.cleanDirectory(modelDir);
+        await fileManager.cleanDirectory(modelDir);
       }
       yield PreparationStatus(PreparationStep.error, "模型准备失败: $e");
     }
@@ -98,19 +112,31 @@ class SherpaDataSourceImpl implements AsrDataSource {
 
   // 保持 prepare 方法的逻辑清晰
   Stream<PreparationStatus> _downloadAndValidateModel(Directory modelDir, ModelConfig modelConfig) async* {
-    // 清理可能存在的损坏文件
-    await _fileManager.cleanDirectory(modelDir);
-    // 重新创建目录
-    await modelDir.create(recursive: true); // 确保目录存在
+    final fileManager = _ref.read(fileManagerProvider);
+    final downloader = _ref.read(downloaderProvider);
 
-    // 使用 yield* 委托下载和解压流
-    yield* _downloader.downloadAndUnzip(modelConfig, modelDir);
+    final zipFile = File('${modelDir.path}/${modelConfig.downloadUrl.split('/').last}');
+    
+    // 监听下载流
+    yield const PreparationStatus(PreparationStep.downloading, "开始下载...", progress: 0.0);
+    await for (final progress in downloader.download(modelConfig.downloadUrl, zipFile.path)) {
+      yield PreparationStatus(PreparationStep.downloading, "下载中...", progress: progress.received / progress.total);
+    }
+    
+    // 校验
+    yield const PreparationStatus(PreparationStep.checking, "校验文件...");
+    if (!await fileManager.verifyChecksum(zipFile, modelConfig.checksum)) {
+      throw Exception("文件校验失败");
+    }
+    
+    // 解压
+    yield const PreparationStatus(PreparationStep.checking, "解压中...");
+    await Downloader.unzip(zipFile, modelDir);
+    await zipFile.delete();
 
-    // 下载解压后再次验证
-    final isDownloadedModelValid = await _fileManager.validateModelFiles(modelDir, modelConfig);
-    if (!isDownloadedModelValid) {
-      // 如果验证失败，抛出异常，让外层 try-catch 处理回滚
-      throw Exception("下载后的模型文件验证失败");
+    // 再次验证解压后的文件
+    if (!await fileManager.validateFilesExist(modelDir, modelConfig.files)) {
+      throw Exception("解压后的文件不完整");
     }
   }
 
@@ -121,18 +147,17 @@ class SherpaDataSourceImpl implements AsrDataSource {
     _stream = _recognizer!.createStream();
     _lastRecognizedText = '';
     
-    if (!await _audioRecorder.hasPermission()) throw Exception("录音权限被拒绝");
+    final audioSource = _ref.read(audioSourceProvider);
+    try{
+      await audioSource.start();
+    }catch(e){
+      throw Exception("启动音频源失败: $e");
+    }
 
-    final audioStream = await _audioRecorder.startStream(const RecordConfig(
-      encoder: AudioEncoder.pcm16bits,
-      sampleRate: 16000,
-      numChannels: 1,
-    ));
-
-    _audioSubscription = audioStream.listen((data) {
+    _audioSubscription = audioSource.stream.listen((data) {
       if (_recognizer == null || _stream == null) return;
       
-      final samples = convertBytesToFloat32(Uint8List.fromList(data));
+      final samples = AudioUtils.bytesToFloat32(Uint8List.fromList(data));
       _stream!.acceptWaveform(samples: samples, sampleRate: 16000);
 
       while (_recognizer!.isReady(_stream!)) {
@@ -165,8 +190,8 @@ class SherpaDataSourceImpl implements AsrDataSource {
         _resultController.add(AsrResult(text: _lastRecognizedText + remainingText, isFinal: true));
       }
     }
-    
-    await _audioRecorder.stop();
+    final audioSource = _ref.read(audioSourceProvider);
+    await audioSource.stop();
     _stream?.free();
     _stream = null;
   }
@@ -175,8 +200,9 @@ class SherpaDataSourceImpl implements AsrDataSource {
   @override
   void dispose() {
     // ... dispose 方法保持不变 ...
+    final audioSource = _ref.read(audioSourceProvider);
     _audioSubscription?.cancel();
-    _audioRecorder.dispose();
+    audioSource.dispose();
     _stream?.free();
     _recognizer?.free();
     _resultController.close();
