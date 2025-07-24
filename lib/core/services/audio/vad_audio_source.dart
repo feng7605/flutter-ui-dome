@@ -1,137 +1,170 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart' show rootBundle; // 引入 rootBundle
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_frame/core/services/audio/audio_source.dart';
 import 'package:flutter_frame/core/utils/audio_utils.dart';
-import 'package:path_provider/path_provider.dart'; // 引入 path_provider
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa_onnx;
 
-//音源检测
+/// Isolate 之间传递消息的封装类
+class _IsolateMessage {
+  final SendPort? sendPort;
+  final dynamic data; // 可以是 List<int> 或控制命令 (如 'stop')
+
+  _IsolateMessage({this.sendPort, this.data});
+}
+
+/// Isolate 初始化时需要的信息
+class _VadInitParams {
+  final SendPort sendPort;
+  final String modelPath;
+
+  _VadInitParams(this.sendPort, this.modelPath);
+}
+
+/// 这是将在新 Isolate 中执行的顶层函数
+/// 它不能是类的方法
+Future<void> _vadIsolateEntrypoint(_VadInitParams params) async {
+  final receivePort = ReceivePort();
+  params.sendPort.send(_IsolateMessage(sendPort: receivePort.sendPort));
+
+  sherpa_onnx.VoiceActivityDetector? vad;
+
+  try {
+    final sileroVadConfig = sherpa_onnx.SileroVadModelConfig(
+      model: params.modelPath,
+      minSilenceDuration: 0.25,
+      minSpeechDuration: 0.2,
+      windowSize: 512,
+    );
+    final vadConfig = sherpa_onnx.VadModelConfig(
+      sileroVad: sileroVadConfig,
+      numThreads: 1, // Isolate 内部是单线程的
+      debug: false,
+    );
+    vad = sherpa_onnx.VoiceActivityDetector(
+      config: vadConfig,
+      bufferSizeInSeconds: 5, // 保持较小的缓冲区
+    );
+  } catch (e) {
+    params.sendPort.send(_IsolateMessage(data: Exception("VAD worker failed to initialize: $e")));
+    return;
+  }
+  
+  await for (final message in receivePort) {
+    if (message is _IsolateMessage) {
+      if (message.data is List<int>) {
+        // 这是音频数据，执行密集计算
+        final floatSamples = AudioUtils.bytesToFloat32(Uint8List.fromList(message.data));
+        vad.acceptWaveform(floatSamples);
+
+        if (vad.isDetected()) {
+          while (!vad.isEmpty()) {
+            final segment = vad.front();
+            // 将处理结果发回主 Isolate
+            params.sendPort.send(_IsolateMessage(data: AudioUtils.float32ToBytes(segment.samples)));
+            vad.pop();
+          }
+        }
+      } else if (message.data == 'stop') {
+        // 处理停止命令
+        vad.flush();
+        while (!vad.isEmpty()) {
+          final segment = vad.front();
+          params.sendPort.send(_IsolateMessage(data: AudioUtils.float32ToBytes(segment.samples)));
+          vad.pop();
+        }
+      } else if (message.data == 'reset') {
+        vad.reset();
+      }
+    }
+  }
+}
+
+
+// --- 这是您项目中使用的主要类 ---
+
 class VadAudioSource implements AudioSource {
   final AudioSource _inputSource;
-  final Ref _ref;
   
-  sherpa_onnx.VoiceActivityDetector? _vad;
-  StreamSubscription<List<int>>? _inputSubscription;
   final _outputController = StreamController<List<int>>.broadcast();
+  StreamSubscription<List<int>>? _inputSubscription;
+  
+  Isolate? _vadIsolate;
+  SendPort? _vadSendPort;
+  final _isolateReadyCompleter = Completer<void>();
 
-  // **新增**: 用于存储从 assets 复制出来的 VAD 模型文件的路径
-  String? _localVadModelPath;
-
-  VadAudioSource({required AudioSource inputSource, required Ref ref})
-      : _inputSource = inputSource,
-        _ref = ref;
+  VadAudioSource({required AudioSource inputSource}) : _inputSource = inputSource;
 
   @override
   Stream<List<int>> get stream => _outputController.stream;
 
-  /// **核心修改**: 初始化方法现在从 assets 加载模型
-  Future<void> _initialize() async {
-    if (_vad != null) return;
-    
-    try {
-      // 1. 获取本地 VAD 模型文件的路径
-      _localVadModelPath = await _getVadModelPathFromAssets();
-      
-      // 如果路径为 null，说明文件有问题，VAD 将不被启用
-      if (_localVadModelPath == null) {
-        print("VAD 模型文件未能从 assets 中准备好。VAD 功能将不被启用。");
-        return; 
-      }
+  /// 新的 init 方法，负责创建 Isolate
+  Future<void> init() async {
+    if (_vadIsolate != null) return;
 
-      // 2. 使用本地文件路径初始化 SileroVadModelConfig
-      final sileroVadConfig = sherpa_onnx.SileroVadModelConfig(
-        model: _localVadModelPath!,
-        minSilenceDuration: 0.25,
-        minSpeechDuration: 0.2,
-        windowSize: 512,
-      );
-
-      final vadConfig = sherpa_onnx.VadModelConfig(
-        sileroVad: sileroVadConfig,
-        numThreads: 1,
-        debug: false,
-      );
-
-      _vad = sherpa_onnx.VoiceActivityDetector(
-        config: vadConfig,
-        bufferSizeInSeconds: 30,
-      );
-      print("VAD Service initialized successfully from assets.");
-
-    } catch (e) {
-      print("初始化 VAD 时发生错误: $e");
-      // 出错时，_vad 保持为 null，音频将直接透传
+    final receivePort = ReceivePort();
+    final modelPath = await _getVadModelPathFromAssets();
+    if (modelPath == null) {
+      throw Exception("VAD 模型文件未能从 assets 中准备好。");
     }
-  }
 
-  ///文件复制到本地并返回路径
-  Future<String?> _getVadModelPathFromAssets() async {
-    try {
-      // 定义 assets 中的路径和目标本地路径
-      const assetPath = 'assets/res/models/vad.onnx';
-      final appDocsDir = await getApplicationDocumentsDirectory();
-      final localPath = '${appDocsDir.path}/vad.onnx';
-      
-      final localFile = File(localPath);
+    _vadIsolate = await Isolate.spawn(
+      _vadIsolateEntrypoint,
+      _VadInitParams(receivePort.sendPort, modelPath),
+      onError: receivePort.sendPort,
+      onExit: receivePort.sendPort,
+    );
 
-      // 检查本地文件是否已存在
-      if (await localFile.exists()) {
-        print("VAD 模型文件已存在于本地: $localPath");
-        return localPath;
-      }
-      
-      print("VAD 模型文件不存在，正在从 assets 复制...");
-      // 从 assets 读取文件数据
-      final byteData = await rootBundle.load(assetPath);
-      final buffer = byteData.buffer;
-      
-      // 将数据写入本地文件
-      await localFile.writeAsBytes(
-        buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes)
-      );
-      
-      print("VAD 模型文件成功复制到: $localPath");
-      return localPath;
-
-    } catch (e) {
-      print("从 assets 复制 VAD 模型文件时失败: $e");
-      return null;
-    }
-  }
-
-  // start(), stop(), dispose() 和转换函数都保持不变
-  // ...
-  @override
-  Future<void> start() async {
-    // 先初始化 VAD 引擎
-    await _initialize();
-    
-    // 再启动输入源
-    await _inputSource.start();
-
-    _inputSubscription = _inputSource.stream.listen((audioChunk) {
-      // 如果 VAD 未初始化，直接透传原始音频
-      if (_vad == null) {
-        _outputController.add(audioChunk);
-        return;
-      }
-      
-      // VAD 逻辑
-      final floatSamples = AudioUtils.bytesToFloat32(Uint8List.fromList(audioChunk));
-      _vad!.acceptWaveform(floatSamples);
-      
-      if (_vad!.isDetected()) {
-        while (!_vad!.isEmpty()) {
-          final segment = _vad!.front();
-          // **修改点 4**: 将 VAD 输出的 Float32List 转换回 List<int>
-          _outputController.add(AudioUtils.float32ToBytes(segment.samples));
-          _vad!.pop();
+    receivePort.listen((message) {
+      if (message is _IsolateMessage) {
+        if (message.sendPort != null) {
+          // Isolate 已经准备好，并把它的 SendPort 发回来了
+          _vadSendPort = message.sendPort;
+          if (!_isolateReadyCompleter.isCompleted) {
+            _isolateReadyCompleter.complete();
+            print("VAD Isolate is ready.");
+          }
+        } else if (message.data is List<int>) {
+          // 从 Isolate 接收到处理好的语音数据
+          _outputController.add(message.data);
+        } else if (message.data is Exception) {
+          // Isolate 发生了错误
+          if (!_isolateReadyCompleter.isCompleted) {
+            _isolateReadyCompleter.completeError(message.data);
+          }
+          print("Error from VAD Isolate: ${message.data}");
+        }
+      } else {
+        print("VAD Isolate exited unexpectedly.");
+        if (!_isolateReadyCompleter.isCompleted) {
+            _isolateReadyCompleter.completeError(Exception("VAD Isolate exited unexpectedly."));
         }
       }
+    });
+
+    return _isolateReadyCompleter.future;
+  }
+
+  @override
+  Future<void> start() async {
+    // 等待 Isolate 完全准备好
+    await _isolateReadyCompleter.future;
+
+    if (_vadSendPort == null) {
+      throw StateError("VAD Isolate is not available.");
+    }
+    
+    // 发送重置命令，确保状态干净
+    _vadSendPort!.send(_IsolateMessage(data: 'reset'));
+
+    await _inputSource.start();
+    _inputSubscription = _inputSource.stream.listen((audioChunk) {
+      // 将原始数据发送到 Isolate 进行处理，主线程不进行任何计算
+      _vadSendPort?.send(_IsolateMessage(data: audioChunk));
     });
   }
 
@@ -140,14 +173,8 @@ class VadAudioSource implements AudioSource {
     await _inputSubscription?.cancel();
     _inputSubscription = null;
 
-    if (_vad != null) {
-      _vad!.flush();
-      while (!_vad!.isEmpty()) {
-        final segment = _vad!.front();
-        _outputController.add(AudioUtils.float32ToBytes(segment.samples));
-        _vad!.pop();
-      }
-    }
+    // 向 Isolate 发送停止命令，让它 flush 剩余的缓冲区
+    _vadSendPort?.send(_IsolateMessage(data: 'stop'));
     
     await _inputSource.stop();
   }
@@ -155,10 +182,39 @@ class VadAudioSource implements AudioSource {
   @override
   void dispose() {
     _inputSubscription?.cancel();
-    _vad?.free();
+    _vadIsolate?.kill(priority: Isolate.immediate);
+    _vadIsolate = null;
     _outputController.close();
-    _inputSource.dispose(); // 确保输入源也被 dispose
-    print("VadAudioSource disposed.");
+    _inputSource.dispose();
+    print("VadAudioSource disposed and Isolate killed.");
   }
 
+  // _getVadModelPathFromAssets 保持不变
+  Future<String?> _getVadModelPathFromAssets() async {
+    try {
+      const assetPath = 'assets/res/models/vad.onnx';
+      final appDocsDir = await getApplicationDocumentsDirectory();
+      final localPath = '${appDocsDir.path}/vad.onnx';
+      
+      final localFile = File(localPath);
+      if (await localFile.exists()) {
+        print("VAD 模型文件已存在于本地: $localPath");
+        return localPath;
+      }
+      
+      print("VAD 模型文件不存在，正在从 assets 复制...");
+      final byteData = await rootBundle.load(assetPath);
+      final buffer = byteData.buffer;
+      
+      await localFile.writeAsBytes(
+        buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes)
+      );
+      
+      print("VAD 模型文件成功复制到: $localPath");
+      return localPath;
+    } catch (e) {
+      print("从 assets 复制 VAD 模型文件时失败: $e");
+      return null;
+    }
+  }
 }

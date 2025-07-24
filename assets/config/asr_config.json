@@ -11,12 +11,21 @@
                     "label": "流式识别",
                     "models": [
                         {
-                            "id": "zipformer-test-v1",
-                            "name": "Zipformer2 测试模型 v1",
+                            "id": "streaming-zipformer-zh-14M",
+                            "name": "streaming-zipformer-zh-14M",
                             "version": "1",
                             "downloadUrl": "http://192.168.8.228:7801/test.zip",
                             "modelType": "zipformer2",
                             "files": ["decoder.onnx", "encoder.onnx", "joiner.onnx", "tokens.txt"],
+                            "checksum": "1"
+                        },
+                        {
+                            "id": "moonshine",
+                            "name": "moonshine",
+                            "version": "1",
+                            "downloadUrl": "http://192.168.8.228:7801/moonshine.zip",
+                            "modelType": "",
+                            "files": ["cached_decode.int8.onnx", "encode.int8.onnx", "preprocess.onnx", "uncached_decode.int8.onnx"],
                             "checksum": "1"
                         }
                     ]

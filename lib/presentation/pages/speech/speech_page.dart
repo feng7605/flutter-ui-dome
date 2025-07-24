@@ -1,9 +1,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_frame/features/asr/presentation/pages/recognition_page.dart';
+import 'package:flutter_frame/presentation/pages/speech/mic_test_page.dart';
+import 'package:flutter_frame/presentation/pages/speech/vad_page.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum DemoType {
+  micTest("麦克风测试"),
+  vad("语音检测"),
   speechRecognition('语音识别'),
   keywordSpotting('关键词识别'),
   textToSpeech('语音合成');
@@ -49,6 +53,10 @@ class SpeechPage extends ConsumerWidget {
   /// 根据选择的 DemoType 构建对应的 UI
   Widget _buildDemoUI(BuildContext context, WidgetRef ref, DemoType demoType) {
     switch (demoType) {
+      case DemoType.micTest:
+        return const MicTestPage();
+      case DemoType.vad:
+        return const VadPage();
       case DemoType.speechRecognition:
         return const SpeechRecognitionPage(); // 抽离出 ASR 的专属 Widget
       case DemoType.keywordSpotting:

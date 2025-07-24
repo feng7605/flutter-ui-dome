@@ -178,8 +178,8 @@ class ScaffoldWithNavBar extends StatelessWidget {
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_sharp),
-            label: 'Test',
+            icon: Icon(Icons.audio_file),
+            label: 'Speech',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),

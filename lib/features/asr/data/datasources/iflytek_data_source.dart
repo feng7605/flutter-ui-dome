@@ -3,7 +3,7 @@ import 'package:flutter_frame/features/asr/data/models/asr_config.dart';
 
 import '../../domain/entities/asr_result.dart';
 import '../../domain/repositories/asr_repository.dart';
-import 'asr_data_source.dart';
+import 'asr_base.dart';
 
 class IflytekDataSource implements AsrDataSource {
   final SupplierConfig config;

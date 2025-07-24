@@ -1,7 +1,7 @@
 import 'dart:async';
 import '../../domain/entities/asr_result.dart';
 import '../../domain/repositories/asr_repository.dart';
-import '../datasources/asr_data_source.dart';
+import '../datasources/asr_base.dart';
 
 class AsrRepositoryImpl implements AsrRepository {
   final AsrDataSource _dataSource;

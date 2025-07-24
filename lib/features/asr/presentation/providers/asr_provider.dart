@@ -1,14 +1,15 @@
 // features/asr/presentation/providers/asr_providers.dart
 import 'package:flutter_frame/core/bootstrap/module_bootstrapper.dart';
+import 'package:flutter_frame/features/asr/data/datasources/sherpa_offline.dart';
 import 'package:flutter_frame/features/asr/data/models/asr_config.dart';
 import 'package:flutter_frame/features/asr/data/services/asr_config_service.dart';
 import 'package:flutter_frame/features/asr/domain/entities/asr_result.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/asr_data_source.dart';
+import '../../data/datasources/asr_base.dart';
 import '../../data/datasources/iflytek_data_source.dart';
 // 关键的 import: 导入存根文件，而不是任何一个具体实现
-import '../../data/datasources/sherpa_data_source.dart';
+import '../../data/datasources/sherpa_data.dart';
 import '../../data/repositories/asr_repository_impl.dart';
 import '../../domain/repositories/asr_repository.dart';
 import '../state/asr_screen_state.dart';
@@ -71,7 +72,7 @@ final asrRepositoryProvider = Provider.autoDispose<AsrRepository>((ref) {
       switch (vendor) {
         case AsrVendor.sherpa:
           final sherpaConfig = config.getSupplier('sherpa');
-          dataSource = SherpaDataSourceImpl(config: sherpaConfig!);
+          dataSource = OfflineVadDataSource(config: sherpaConfig!, ref: ref);
           break;
         case AsrVendor.iflytek:
           final iflytekConfig = config.getSupplier('iflytek');
