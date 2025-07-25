@@ -20,6 +20,7 @@ final audioSourceProvider = Provider<AudioSource>((ref) {
 
   AudioSource currentSource = MicrophoneAudioSource();
 
+  //currentSource = VadAudioSource(inputSource: currentSource);
   //人身增强
   // currentSource = SpeechEnhancementAudioSource(inputSource: currentSource, ref: ref);
   // final AudioSource finalSource = useVad
@@ -36,9 +37,7 @@ final vadSourceProvider = FutureProvider<VadAudioSource>((ref) async {
   final micSource = ref.watch(audioSourceProvider);
   
   final vadSource = VadAudioSource(inputSource: micSource);
-  
-  // 在这里调用耗时的 init 方法
-  await vadSource.init();
+
 
   // 当 Future 完成后，返回已经完全初始化好的 vadSource 实例
   ref.onDispose(() {
